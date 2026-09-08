@@ -1,0 +1,40 @@
+name: wewln
+options:
+  bundleIdPrefix: app.wewln
+  deploymentTarget:
+    iOS: "16.0"
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    TARGETED_DEVICE_FAMILY: "1"
+    CODE_SIGNING_ALLOWED: NO
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+targets:
+  wewln:
+    type: application
+    platform: iOS
+    sources:
+      - App
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.wewln.spacedkeyboard
+        INFOPLIST_FILE: App/Info.plist
+    dependencies:
+      - target: WewlnKeyboard
+        embed: true
+  WewlnKeyboard:
+    type: app-extension
+    platform: iOS
+    sources:
+      - Keyboard
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.wewln.spacedkeyboard.keyboard
+        INFOPLIST_FILE: Keyboard/Info.plist
+        APPLICATION_EXTENSION_API_ONLY: YES
+schemes:
+  wewln:
+    build:
+      targets:
+        wewln: all

@@ -1,17 +1,30 @@
 name: Build wewln
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/build.yml'
+      - 'scripts/generate_icons.py'
+      - 'project.yml'
+      - 'App/**'
+      - 'Keyboard/**'
+      - 'Tests/**'
 permissions:
   contents: read
 jobs:
   build:
     runs-on: macos-15
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - name: Run spacing tests as executable
         run: |
           swiftc Keyboard/Spacing.swift Tests/main.swift -o /tmp/wewln-tests
           /tmp/wewln-tests
+      - name: Generate app icon
+        run: python3 scripts/generate_icons.py
       - name: Install project generator
         run: brew install xcodegen
       - name: Generate Xcode project
@@ -25,19 +38,35 @@ jobs:
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
             build | tee build.log
-      - name: Package IPA (app AND keyboard extension)
+      - name: Package IPA with keyboard and icon
         run: |
           mkdir -p Payload
           cp -R build/Build/Products/Release-iphoneos/wewln.app Payload/
           test -d Payload/wewln.app/PlugIns/WewlnKeyboard.appex
+          test -f Payload/wewln.app/Assets.car
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleIcons:CFBundlePrimaryIcon' Payload/wewln.app/Info.plist
           /usr/libexec/PlistBuddy -c 'Print :NSExtension:NSExtensionPointIdentifier' Payload/wewln.app/PlugIns/WewlnKeyboard.appex/Info.plist
           zip -qry wewln-unsigned.ipa Payload
+          shasum -a 256 wewln-unsigned.ipa > SHA256SUMS.txt
       - name: Downloadable IPA
         uses: actions/upload-artifact@v4
         with:
           name: wewln-IPA
-          path: wewln-unsigned.ipa
+          path: |
+            wewln-unsigned.ipa
+            wewln-icon.png
+            SHA256SUMS.txt
           retention-days: 14
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release create "build-${GITHUB_RUN_NUMBER}" \
+            wewln-unsigned.ipa wewln-icon.png SHA256SUMS.txt \
+            --target "$GITHUB_SHA" \
+            --title "wewln 1.0 — build ${GITHUB_RUN_NUMBER}" \
+            --notes-file RELEASE_NOTES.md
       - name: Build log
         if: failure()
         uses: actions/upload-artifact@v4

@@ -1,0 +1,47 @@
+name: Build wewln
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run spacing tests as executable
+        run: |
+          swiftc Keyboard/Spacing.swift Tests/main.swift -o /tmp/wewln-tests
+          /tmp/wewln-tests
+      - name: Install project generator
+        run: brew install xcodegen
+      - name: Generate Xcode project
+        run: xcodegen generate
+      - name: Build unsigned device app
+        run: |
+          set -o pipefail
+          xcodebuild -project wewln.xcodeproj -scheme wewln \
+            -configuration Release -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build | tee build.log
+      - name: Package IPA (app AND keyboard extension)
+        run: |
+          mkdir -p Payload
+          cp -R build/Build/Products/Release-iphoneos/wewln.app Payload/
+          test -d Payload/wewln.app/PlugIns/WewlnKeyboard.appex
+          /usr/libexec/PlistBuddy -c 'Print :NSExtension:NSExtensionPointIdentifier' Payload/wewln.app/PlugIns/WewlnKeyboard.appex/Info.plist
+          zip -qry wewln-unsigned.ipa Payload
+      - name: Downloadable IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: wewln-IPA
+          path: wewln-unsigned.ipa
+          retention-days: 14
+      - name: Build log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: build.log
+          if-no-files-found: ignore
